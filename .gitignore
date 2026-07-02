@@ -1,0 +1,6 @@
+.env
+.DS_Store
+data/.DS_Store
+data/vector_store/
+__pycache__/
+.ipynb_checkpoints/
