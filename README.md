@@ -45,9 +45,10 @@ It is designed as a lightweight, hackable reference implementation of a RAG pipe
 | ✂️ Smart chunking | Recursive character-based text splitting with configurable overlap |
 | 🧠 Semantic embeddings | Sentence-Transformer (`all-MiniLM-L6-v2`) embeddings |
 | ⚡ Fast retrieval | FAISS flat L2 index for similarity search |
+| 🇮🇳 Hinglish Explaining Tone | Understands questions in Hinglish and answers in intuitive Hinglish with a mentor/explaining tone |
 | 💬 Grounded answers | Groq LLM synthesizes a summary from retrieved context |
 | 💾 Persistence | Vector index and metadata persisted to disk and reloaded on demand |
-| 🖥️ Streamlit GUI | Dark-themed chat interface with source transparency |
+| 🖥️ Streamlit GUI | Dark-themed chat interface with source transparency & style selector |
 
 ---
 
@@ -286,11 +287,18 @@ store.build_from_documents(docs)   # chunks, embeds, indexes, and saves to disk
 from src.search import RAGSearch
 
 rag_search = RAGSearch()
-summary = rag_search.search_and_summarize(
-    "What is attention mechanism?",
-    top_k=3
+
+# 1. Ask in English
+summary_en = rag_search.search_and_summarize("What is attention mechanism?", top_k=3)
+print(summary_en)
+
+# 2. Ask in Hinglish (automatic language detection & explaining tone)
+summary_hi = rag_search.search_and_summarize(
+    "Attention mechanism kya hota hai aur transformers me iska kya role hai?",
+    top_k=3,
+    language_mode="auto"  # options: 'auto', 'hinglish', 'english'
 )
-print(summary)
+print(summary_hi)
 ```
 
 ### 5. Run the example driver script
@@ -299,7 +307,7 @@ print(summary)
 python app.py
 ```
 
-Expected flow: loads documents → loads the persisted FAISS store → runs a sample query (`"What is attention mechanism?"`) → prints an LLM-generated, context-grounded summary.
+Expected flow: loads the persisted FAISS store → executes a Hinglish query with automatic query reformulation for English semantic retrieval → prints an LLM-generated, context-grounded summary in friendly, explanatory Hinglish.
 
 ---
 
@@ -366,6 +374,7 @@ Expected flow: loads documents → loads the persisted FAISS store → runs a sa
 - [x] Fix relative import in `vectorstore.py`'s `__main__` block
 - [x] Add a Streamlit front-end with dark theme and source transparency
 - [x] Add source-citation metadata (filenames) to generated summaries
+- [x] Support Hinglish queries with automatic English retrieval reformulation & explanatory tone
 - [ ] Swap `IndexFlatL2` for an approximate index (`IndexIVFFlat` / `HNSW`) for large corpora
 - [ ] Add automated tests and CI
 - [ ] Streaming token-by-token answers in the GUI

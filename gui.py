@@ -37,6 +37,9 @@ PERSIST_DIR = "faiss_store"
 DATA_DIR = "data"
 
 AVAILABLE_LLM_MODELS = [
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-120b",
+    "groq/compound",
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
     "mixtral-8x7b-32768",
@@ -509,6 +512,19 @@ def _render_settings_section() -> None:
         help="Groq-hosted LLM for generating answers.",
     )
 
+    # Response Language & Explaining Tone selector
+    st.selectbox(
+        "Response Style & Language",
+        options=[
+            "Auto-detect (Doctor's Rx / Hinglish & English)",
+            "Hinglish (Doctor's Prescription Style / नुस्खा अंदाज़)",
+            "English (Doctor's Prescription Style)",
+        ],
+        index=0,
+        key="response_language_mode",
+        help="Crisp, to-the-point answers formatted like a clinical prescription.",
+    )
+
     # F-6: Embedding model
     st.text_input(
         "Embedding Model",
@@ -638,8 +654,19 @@ def handle_new_query(query: str) -> None:
                         "Add it to your `.env` file and restart the app."
                     )
 
-                # Get sources via direct vectorstore query (PRD Section 9.4)
-                source_results = rag.vectorstore.query(query, top_k=top_k)
+                # Parse response language mode
+                selected_mode = st.session_state.get(
+                    "response_language_mode", "Auto-detect (Hinglish / English)"
+                )
+                if "Hinglish" in selected_mode and "Auto" not in selected_mode:
+                    lang_mode = "hinglish"
+                elif "English" in selected_mode and "Auto" not in selected_mode:
+                    lang_mode = "english"
+                else:
+                    lang_mode = "auto"
+
+                # Get sources using English-reformulated query if Hinglish
+                source_results, search_query_used = rag.retrieve(query, top_k=top_k)
                 sources = []
                 for r in source_results:
                     meta = r.get("metadata", {}) or {}
@@ -649,8 +676,10 @@ def handle_new_query(query: str) -> None:
                         "text": meta.get("text", ""),
                     })
 
-                # Get LLM answer
-                answer = rag.search_and_summarize(query, top_k=top_k)
+                # Get LLM answer with explaining tone in Hinglish/English
+                answer = rag.search_and_summarize(
+                    query, top_k=top_k, language_mode=lang_mode
+                )
 
                 # Render answer
                 st.markdown(
