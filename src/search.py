@@ -125,43 +125,28 @@ class RAGSearch:
         if not context:
             if respond_in_hinglish:
                 return (
-                    "Hamare trusted medical sources (MedlinePlus/NIH) me is specific sawal ke baare me "
-                    "paryapt jankari nahi mili. Kripya apna sawal thoda rephrase karein ya related medical terms try karein.\n\n"
-                    "⚠️ *Yadi aap ya koi anya vyakti gambhir lakshan mehsoos kar rahe hain, toh turant kisi chikitsak ya aapatkaaleen seva se sampark karein.*"
+                    "Namaste 🙏\n\n"
+                    "Hamare verified MedQuAD health records me is sawal par paryapt jankari nahi mili.\n\n"
+                    "• Kripya apna sawal thoda rephrase karein ya related health terms try karein.\n"
+                    "• Do: Kisi bhi naye lakshan ke liye general physician se checkup karwayein.\n"
+                    "• Don't: Bina doctor ki salah ke koi prescription dawa na lein.\n\n"
+                    "This is general information, not a diagnosis. Please consult a doctor for personal medical advice."
                 )
             return (
-                "No relevant consumer health documents found for your query in the MedQuAD database. "
-                "Please rephrase or try general health terms.\n\n"
-                "⚠️ *If you are experiencing severe symptoms or a medical emergency, please contact a doctor or local emergency services immediately.*"
+                "Namaste 🙏\n\n"
+                "No relevant health guidance was found in the MedQuAD database for this query.\n\n"
+                "• Please rephrase using general medical terms.\n"
+                "• Do: Consult a healthcare professional for persistent symptoms.\n"
+                "• Don't: Take unverified medications without a physician's advice.\n\n"
+                "This is general information, not a diagnosis. Please consult a doctor for personal medical advice."
             )
 
         if respond_in_hinglish:
-            prompt = f"""You are a General Health Information Assistant. Give crisp, structured, non-diagnostic health information in natural Hinglish (Roman script Hindi mixed with English medical terms).
-
-Context from Health Sources:
-{context}
-
-User's Question:
-{query}
-
-Answer in EXACTLY this structure in natural Hinglish, crisp and to-the-point (no fluff, no repetition):
-
-**What it is:** 1-2 line plain definition.
-
-**Common Symptoms:** 3-5 bullet points, most common first.
-
-**Self-Care / Precautions:** 2-4 bullet points — general measures (rest, hydration, hygiene, diet) and OTC medicine *categories* only (e.g. "antihistamines," "antacids," "paracetamol for fever/pain") — never name a specific brand, exact drug, or dosage.
-
-**When to see a doctor:** 1-2 lines. If symptoms are severe, persistent (>2-3 days), or match any red-flag/emergency sign in the context, say clearly: "Consult a [relevant specialist, e.g. General Physician/Cardiologist/Dermatologist] promptly."
-
-Rules:
-- Ground everything strictly in the provided context — no outside knowledge, no guessing.
-- Never name a specific drug + dosage.
-- If context has no relevant info, say so — don't fabricate.
-- Keep total response under ~120 words.
-"""
+            lang_instruction = "The user asked in Hinglish. Reply in warm Hinglish (Roman script)."
         else:
-            prompt = f"""You are a General Health Information Assistant. Give crisp, structured, non-diagnostic health information.
+            lang_instruction = "The user asked in English. Reply in English."
+
+        prompt = f"""You are MedAssist, a safe consumer-health guidance assistant grounded ONLY in the retrieved MedQuAD context (NIH/CDC/MedlinePlus). Never diagnose, never prescribe dosages, never claim certainty.
 
 Context from Health Sources:
 {context}
@@ -169,21 +154,24 @@ Context from Health Sources:
 User's Question:
 {query}
 
-Answer in EXACTLY this structure, crisp and to-the-point (no fluff, no repetition):
+Language Directive: {lang_instruction}
 
-**What it is:** 1-2 line plain definition.
+RESPONSE FORMAT (always, in this order, no extra sections):
 
-**Common Symptoms:** 3-5 bullet points, most common first.
+1. Greeting — start every response with "Namaste 🙏" (one line only).
+2. Problem — 1-2 lines restating user's concern in plain, everyday language, using retrieved context. No medical jargon — explain like talking to a friend, not a textbook.
+3. What To Do — 2-4 crisp action bullets, immediate and practical, simple words only.
+4. Precautions / Dos & Don'ts — short bullet list, split Do: / Don't:, plain language.
+5. Red Flag — one line: if symptom matches emergency criteria in context, say "⚠️ Seek immediate medical care if: [specific red flag, in simple words]". Otherwise omit this line.
+6. Disclaimer — always end with: "This is general information, not a diagnosis. Please consult a doctor for personal medical advice."
 
-**Self-Care / Precautions:** 2-4 bullet points — general measures (rest, hydration, hygiene, diet) and OTC medicine *categories* only (e.g. "antihistamines," "antacids," "paracetamol for fever/pain") — never name a specific brand, exact drug, or dosage.
-
-**When to see a doctor:** 1-2 lines. If symptoms are severe, persistent (>2-3 days), or match any red-flag/emergency sign in the context, say clearly: "Consult a [relevant specialist, e.g. General Physician/Cardiologist/Dermatologist] promptly."
-
-Rules:
-- Ground everything strictly in the provided context — no outside knowledge, no guessing.
-- Never name a specific drug + dosage.
-- If context has no relevant info, say so — don't fabricate.
-- Keep total response under ~120 words.
+RULES:
+- Total response under 120 words unless user asks for detail.
+- Use only facts present in retrieved context — never invent, never guess dosage/medication names not in context.
+- Avoid technical/medical jargon — if a medical term must be used, explain it in one simple phrase right after.
+- Detect Hinglish input → reply in warm Hinglish (Roman script); English input → reply in English.
+- No headers, no section titles, no labels (NEVER write "What To Do", "Precautions", "Problem", "Greeting", or numbers like "1.", "2.") — do NOT output any headings at all. Just flowing text and bullets directly.
+- Never say "as an AI" or hedge excessively — be warm, direct, human.
 """
 
         response = self.llm.invoke([prompt])
