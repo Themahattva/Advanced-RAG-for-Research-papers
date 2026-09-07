@@ -1,12 +1,13 @@
-# 📚 Advanced RAG for Research Papers
+# 🩺 MedAssist — Consumer Health & Medical Guidance RAG
 
-> A modular **Retrieval-Augmented Generation (RAG)** pipeline purpose-built for querying and summarizing academic research papers (PDF, TXT, CSV, Excel, Word, JSON) using semantic search over a FAISS vector store and Groq-hosted LLMs.
+> A modular **Retrieval-Augmented Generation (RAG)** pipeline purpose-built for querying consumer health, symptom guidance, and medical information using the **MedQuAD** dataset (NIH, CDC, MedlinePlus) with semantic search over a FAISS vector store and Groq-hosted LLMs — answering in a **safe, non-diagnostic advisory tone** in both **English and Hinglish**.
 
 <p align="left">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white">
   <img alt="LangChain" src="https://img.shields.io/badge/LangChain-RAG-1C3C3C?logo=langchain&logoColor=white">
   <img alt="FAISS" src="https://img.shields.io/badge/VectorDB-FAISS-00A1D6">
   <img alt="Groq" src="https://img.shields.io/badge/LLM-Groq-F55036">
+  <img alt="Dataset" src="https://img.shields.io/badge/Dataset-MedQuAD_(NIH)-blue">
   <img alt="Streamlit" src="https://img.shields.io/badge/GUI-Streamlit-FF4B4B?logo=streamlit&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
 </p>
@@ -16,39 +17,53 @@
 ## 📖 Table of Contents
 
 - [Overview](#-overview)
+- [Dataset Attribution](#-dataset-attribution-medquad)
 - [Architecture](#-architecture)
-- [How It Works](#-how-it-works)
+- [Safe Advisory Framework](#-safe-advisory-framework)
 - [Tech Stack](#-tech-stack)
 - [Project Structure](#-project-structure)
 - [Installation](#-installation)
 - [Usage](#-usage)
-- [Module Reference](#-module-reference)
-- [Supported File Types](#-supported-file-types)
 - [Configuration](#-configuration)
 - [Roadmap](#-roadmap)
-- [Contributing](#-contributing)
 - [License](#-license)
 
 ---
 
 ## 🔍 Overview
 
-**Advanced RAG for Research Papers** ingests heterogeneous documents (PDFs, plain text, spreadsheets, Word docs, JSON), chunks and embeds them using sentence-transformer embeddings, indexes the vectors in a **FAISS** similarity index, and answers natural-language queries by retrieving the most relevant chunks and passing them to a **Groq-hosted LLM** for grounded summarization.
-
-It is designed as a lightweight, hackable reference implementation of a RAG pipeline — ideal for researchers who want to semantically search across a personal corpus of papers rather than skimming PDFs manually.
+**MedAssist** ingests trusted medical knowledge from the **MedQuAD** dataset (47,400+ QA pairs curated from 12 NIH institutes including MedlinePlus, CDC, NIDDK, and Cancer.gov), indexes the vectors in a **FAISS** similarity store, and answers user queries in a **safe, non-diagnostic, and empathetic advisory tone**.
 
 **Core capabilities:**
 
 | Capability | Description |
 |---|---|
-| 🗂️ Multi-format ingestion | Load PDF, TXT, CSV, XLSX, DOCX, and JSON documents from a single data directory |
-| ✂️ Smart chunking | Recursive character-based text splitting with configurable overlap |
-| 🧠 Semantic embeddings | Sentence-Transformer (`all-MiniLM-L6-v2`) embeddings |
-| ⚡ Fast retrieval | FAISS flat L2 index for similarity search |
-| 🇮🇳 Hinglish Explaining Tone | Understands questions in Hinglish and answers in intuitive Hinglish with a mentor/explaining tone |
-| 💬 Grounded answers | Groq LLM synthesizes a summary from retrieved context |
-| 💾 Persistence | Vector index and metadata persisted to disk and reloaded on demand |
-| 🖥️ Streamlit GUI | Dark-themed chat interface with source transparency & style selector |
+| 🩺 Trusted Medical QA Corpus | Grounded in 47,400+ validated QA pairs from 12 NIH institutes (MedlinePlus, CDC, GHR, Cancer.gov) |
+| 🛡️ Safe & Non-Diagnostic | Evidence-based patient education without prescribing drug dosages or offering personal clinical diagnoses |
+| ⚠️ Red-Flag Warning Triage | Explicitly highlights emergency symptoms that require urgent medical attention |
+| 🇮🇳 Bilingual Support (Hinglish & English) | Intelligently understands queries in Hinglish and delivers warm, clear explanations in Roman-script Hindi |
+| ⚡ Semantic Vector Search | FAISS flat L2 index over `all-MiniLM-L6-v2` dense embeddings |
+| 🔗 Source Transparency | Direct citation badges and links to original NIH/MedlinePlus references for every answer |
+| 🖥️ Streamlit Web GUI | Dark-themed health consultation chat interface with medical disclaimer banner |
+
+---
+
+## 📚 Dataset Attribution: MedQuAD
+
+This project utilizes the **MedQuAD (Medical Question Answering Dataset)**:
+- **Hugging Face**: [`lavita/MedQuAD`](https://huggingface.co/datasets/lavita/MedQuAD)
+- **GitHub**: [`abachaa/MedQuAD`](https://github.com/abachaa/MedQuAD)
+- **Source Material**: 47,457 medical question-answer pairs compiled from 12 trusted National Institutes of Health (NIH) websites, including **MedlinePlus**, **CDC**, **Cancer.gov**, **NIDDK**, and **GHR**.
+
+---
+
+## 🛡️ Safe Advisory Framework
+
+Healthcare RAG requires responsible AI principles:
+1. **Non-Diagnostic**: The system informs rather than diagnoses, stating potential causes according to medical literature without asserting personal clinical certainty.
+2. **Non-Prescriptive**: Avoids prescribing specific drug dosages or advising users to alter prescribed regimens.
+3. **Emergency Triage**: Explicitly identifies red-flag symptoms requiring emergency medical evaluation.
+4. **Universal Medical Disclaimer**: Attached to all responses and prominently displayed across the UI.
 
 ---
 
@@ -58,18 +73,18 @@ It is designed as a lightweight, hackable reference implementation of a RAG pipe
 
 ```mermaid
 flowchart TD
-    A[📁 data/ folder<br/>PDF · TXT · CSV · XLSX · DOCX · JSON] -->|load_all_documents| B[Document Loaders<br/>PyPDFLoader · TextLoader · CSVLoader<br/>UnstructuredExcelLoader · Docx2txtLoader · JSONLoader]
-    B --> C[Raw LangChain Documents]
-    C -->|RecursiveCharacterTextSplitter| D[Chunked Documents<br/>chunk_size=1000, overlap=200]
+    A[📦 MedQuAD Dataset<br/>lavita/MedQuAD Parquet · 47.4k QA Pairs] -->|load_medquad_documents| B[Document Processor<br/>NIH · MedlinePlus · CDC Sources]
+    B --> C[Standardized Medical Documents]
+    C -->|RecursiveCharacterTextSplitter| D[Medical Knowledge Chunks]
     D -->|SentenceTransformer all-MiniLM-L6-v2| E[Dense Vector Embeddings]
     E -->|IndexFlatL2.add| F[(FAISS Vector Index<br/>+ metadata.pkl)]
-    F -->|save / load| G[faiss_store/ on disk]
+    F -->|save / load| G[faiss_store_medquad/ on disk]
 
-    H[🔎 User Query] -->|encode| I[Query Embedding]
+    H[🔎 Health Query / Hinglish or English] -->|reformulate_query| I[English Medical Keywords]
     I -->|index.search top_k| F
-    F --> J[Top-K Relevant Chunks]
-    J --> K[Prompt Assembly<br/>query + retrieved context]
-    K -->|ChatGroq LLM| L[💬 Grounded Summary / Answer]
+    F --> J[Top-K MedQuAD Chunks + URLs]
+    J --> K[Safe Advisory Prompting<br/>Non-Diagnostic + Red Flags + Disclaimer]
+    K -->|Groq LLM| L[💬 Safe Consumer Health Guidance]
 ```
 
 ### Component / class relationship
@@ -286,19 +301,22 @@ store.build_from_documents(docs)   # chunks, embeds, indexes, and saves to disk
 ```python
 from src.search import RAGSearch
 
-rag_search = RAGSearch()
+rag_search = RAGSearch(persist_dir="faiss_store_medquad")
 
-# 1. Ask in English
-summary_en = rag_search.search_and_summarize("What is attention mechanism?", top_k=3)
-print(summary_en)
+# 1. Ask in English (safe consumer health guidance)
+advice_en = rag_search.search_and_summarize(
+    "What are the common symptoms of asthma and how is it managed?",
+    top_k=3
+)
+print(advice_en)
 
-# 2. Ask in Hinglish (automatic language detection & explaining tone)
-summary_hi = rag_search.search_and_summarize(
-    "Attention mechanism kya hota hai aur transformers me iska kya role hai?",
+# 2. Ask in Hinglish (automatic language detection & empathetic advisory tone)
+advice_hi = rag_search.search_and_summarize(
+    "High blood pressure ke kya lakshan hote hain aur ghar par kya savdhaniyan bartein?",
     top_k=3,
     language_mode="auto"  # options: 'auto', 'hinglish', 'english'
 )
-print(summary_hi)
+print(advice_hi)
 ```
 
 ### 5. Run the example driver script
@@ -307,7 +325,7 @@ print(summary_hi)
 python app.py
 ```
 
-Expected flow: loads the persisted FAISS store → executes a Hinglish query with automatic query reformulation for English semantic retrieval → prints an LLM-generated, context-grounded summary in friendly, explanatory Hinglish.
+Expected flow: loads the persisted MedQuAD FAISS store (`faiss_store_medquad`) → executes a consumer health query with automatic query reformulation for NIH semantic lookup → prints a grounded, safe, non-diagnostic advisory answer in Hinglish or English.
 
 ---
 

@@ -3,6 +3,8 @@
 data/.DS_Store
 data/vector_store/
 faiss_store/
+faiss_store_medquad/
+data/medquad/
 __pycache__/
 .ipynb_checkpoints/
 .venv/

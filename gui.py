@@ -33,7 +33,7 @@ from src.search import RAGSearch
 # ---------------------------------------------------------------------------
 
 SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".csv", ".xlsx", ".docx", ".json"}
-PERSIST_DIR = "faiss_store"
+PERSIST_DIR = "faiss_store_medquad"
 DATA_DIR = "data"
 
 AVAILABLE_LLM_MODELS = [
@@ -66,8 +66,8 @@ COLORS = {
 def configure_page() -> None:
     """Set Streamlit page config — must be the first Streamlit call."""
     st.set_page_config(
-        page_title="Research Paper RAG",
-        page_icon="📚",
+        page_title="MedAssist — Consumer Health Advisor",
+        page_icon="🩺",
         layout="wide",
         initial_sidebar_state="expanded",
     )
@@ -427,9 +427,16 @@ def _rebuild_index() -> None:
 
     with st.status("Building index…", expanded=True) as status:
         # Stage 1: Loading documents
-        status.update(label="Loading documents…")
+        status.update(label="Loading MedQuAD health QA records…")
         try:
-            docs = load_all_documents(DATA_DIR)
+            from src.medquad_loader import load_medquad_documents
+            docs = load_medquad_documents(limit=3000)
+            if Path(DATA_DIR).exists():
+                try:
+                    custom_docs = load_all_documents(DATA_DIR)
+                    docs.extend(custom_docs)
+                except Exception:
+                    pass
         except Exception as e:
             status.update(label="❌ Failed to load documents", state="error")
             st.error(f"Error loading documents: {e}")
@@ -438,7 +445,7 @@ def _rebuild_index() -> None:
 
         if not docs:
             status.update(label="⚠️ No documents could be loaded", state="error")
-            st.warning("No loadable documents found in the data directory.")
+            st.warning("No loadable documents found.")
             st.session_state.rebuild_in_progress = False
             return
 
@@ -464,13 +471,12 @@ def _rebuild_index() -> None:
 
         # Stage 4: Building index
         status.update(label="Building index…")
-        metadatas = [
-            {
-                "text": chunk.page_content,
-                "source": chunk.metadata.get("source", "unknown"),
-            }
-            for chunk in chunks
-        ]
+        metadatas = []
+        for chunk in chunks:
+            meta = dict(chunk.metadata) if hasattr(chunk, "metadata") and chunk.metadata else {}
+            meta["text"] = chunk.page_content
+            meta.setdefault("source", "MedQuAD / NIH")
+            metadatas.append(meta)
         store.add_embeddings(np.array(embeddings).astype("float32"), metadatas)
         store.save()
 
@@ -516,13 +522,13 @@ def _render_settings_section() -> None:
     st.selectbox(
         "Response Style & Language",
         options=[
-            "Auto-detect (Doctor's Rx / Hinglish & English)",
-            "Hinglish (Doctor's Prescription Style / नुस्खा अंदाज़)",
-            "English (Doctor's Prescription Style)",
+            "Auto-detect (Safe Advisory / Hinglish & English)",
+            "Hinglish (Safe Advisory / आसान सलाह)",
+            "English (Safe Advisory / Patient Guidance)",
         ],
         index=0,
         key="response_language_mode",
-        help="Crisp, to-the-point answers formatted like a clinical prescription.",
+        help="Compassionate, non-diagnostic patient education from MedQuAD.",
     )
 
     # F-6: Embedding model
@@ -570,8 +576,8 @@ def render_empty_state() -> None:
     st.markdown(
         """
         <div class="empty-state">
-            <h2>📚 No documents indexed yet</h2>
-            <p>Upload research papers and click <strong>🔄 Rebuild Index</strong> in the sidebar to get started.</p>
+            <h2>🩺 No medical guidance indexed yet</h2>
+            <p>Click <strong>🔄 Rebuild Index</strong> in the sidebar to index trusted health records from MedQuAD (NIH / MedlinePlus).</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -608,20 +614,26 @@ def render_chat_history() -> None:
 
 def _render_sources_expander(sources: list[dict]) -> None:
     """Render the sources expander below an assistant message (F-12)."""
-    with st.expander(f"📎 Sources ({len(sources)})"):
+    with st.expander(f"📎 Verified Sources ({len(sources)})"):
         for i, src in enumerate(sources):
-            source_file = src.get("source", "unknown")
-            # Show only the filename, not the full path
-            source_name = Path(source_file).name if source_file != "unknown" else "unknown"
+            source_file = src.get("source", "NIH / MedlinePlus")
+            source_url = src.get("document_url", "")
             distance = src.get("distance", 0.0)
             text = src.get("text", "")
-            preview = text[:300] + ("…" if len(text) > 300 else "")
+            preview = text[:350] + ("…" if len(text) > 350 else "")
 
-            st.markdown(
-                f"**{i + 1}. {source_name}** · "
-                f'<span style="color: {COLORS["muted"]}">distance: {distance:.4f}</span>',
-                unsafe_allow_html=True,
-            )
+            if source_url:
+                st.markdown(
+                    f"**{i + 1}. [{source_file}]({source_url})** 🔗 · "
+                    f'<span style="color: {COLORS["muted"]}">distance: {distance:.4f}</span>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f"**{i + 1}. {source_file}** · "
+                    f'<span style="color: {COLORS["muted"]}">distance: {distance:.4f}</span>',
+                    unsafe_allow_html=True,
+                )
             st.markdown(
                 f'<div class="source-chunk">{preview}</div>',
                 unsafe_allow_html=True,
@@ -671,7 +683,8 @@ def handle_new_query(query: str) -> None:
                 for r in source_results:
                     meta = r.get("metadata", {}) or {}
                     sources.append({
-                        "source": meta.get("source", "unknown"),
+                        "source": meta.get("source", meta.get("document_source", "MedQuAD/NIH")),
+                        "document_url": meta.get("document_url", ""),
                         "distance": r.get("distance", 0.0),
                         "text": meta.get("text", ""),
                     })
@@ -723,8 +736,15 @@ def main() -> None:
     init_session_state()
 
     # F-15: App title & tagline
-    st.title("📚 Research Paper RAG")
-    st.caption("Ask questions across your research paper library.")
+    st.title("🩺 MedAssist — Consumer Health Advisor")
+    st.caption("Evidence-based consumer health guidance powered by MedQuAD (NIH, CDC, MedlinePlus).")
+
+    # Medical Disclaimer Banner
+    st.info(
+        "ℹ️ **Medical Disclaimer:** This assistant provides general health education from public medical sources (MedQuAD/NIH). "
+        "It is **not** a substitute for professional medical diagnosis, advice, or treatment. "
+        "If you are having a medical emergency, call your local emergency services or consult a physician immediately."
+    )
 
     # Sidebar
     render_sidebar()
@@ -753,7 +773,7 @@ def main() -> None:
         if st.session_state.rebuild_in_progress:
             st.info("⏳ Index rebuild in progress — please wait…")
         else:
-            if query := st.chat_input("Ask a question about your papers…"):
+            if query := st.chat_input("Ask a health or medical question in English or Hinglish…"):
                 if not query.strip():
                     pass  # Streamlit won't send empty strings, but guard anyway
                 else:

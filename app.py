@@ -1,16 +1,14 @@
-from src.data_loader import load_all_documents
-from src.vectorstore import FaissVectorStore
 from src.search import RAGSearch
 
 if __name__ == "__main__":
-    rag_search = RAGSearch()
+    rag_search = RAGSearch(persist_dir="faiss_store_medquad")
 
-    # Query in Hinglish
-    query_hinglish = "Attention mechanism kya hota hai aur research papers ke according yeh kaise kaam karta hai?"
+    # Example 1: Consumer health question in Hinglish
+    query_hinglish = "Blood pressure high hone par kya lakshan dikhte hain aur gharelu dekhbhal ke liye kya karein?"
     print("=" * 70)
-    print("🔍 Hinglish Query:", query_hinglish)
+    print("🩺 Consumer Health Query (Hinglish):", query_hinglish)
     print("=" * 70)
     
-    summary = rag_search.search_and_summarize(query_hinglish, top_k=3, language_mode="auto")
-    print("\n💡 Explaining Answer (Hinglish):\n")
-    print(summary)
+    advice = rag_search.search_and_summarize(query_hinglish, top_k=3, language_mode="auto")
+    print("\n💡 Safe Advisory Guidance (MedQuAD / NIH):\n")
+    print(advice)
