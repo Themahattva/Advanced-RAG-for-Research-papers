@@ -43,6 +43,7 @@
 | ⚠️ Red-Flag Warning Triage | Explicitly highlights emergency symptoms that require urgent medical attention |
 | 🇮🇳 Bilingual Support (Hinglish & English) | Intelligently understands queries in Hinglish and delivers warm, clear explanations in Roman-script Hindi |
 | ⚡ Semantic Vector Search | FAISS flat L2 index over `all-MiniLM-L6-v2` dense embeddings |
+| 🎙️ Voice & Microphone Input | Native browser audio recording + fast multilingual transcription via Groq Whisper (`whisper-large-v3-turbo`) |
 | 🔗 Source Transparency | Direct citation badges and links to original NIH/MedlinePlus references for every answer |
 | 🖥️ Streamlit Web GUI | Dark-themed health consultation chat interface with medical disclaimer banner |
 
@@ -239,8 +240,9 @@ Advanced-RAG-for-Research-papers/
 | `src/embedding.py` | `EmbeddingPipeline` | Chunk documents and generate embeddings |
 | `src/vectorstore.py` | `FaissVectorStore` | Build, persist, load, and query the FAISS index |
 | `src/search.py` | `RAGSearch` | Orchestrate retrieval + LLM-based summarization |
+| `src/voice.py` | `transcribe_audio` | Multilingual speech-to-text service powered by Groq Whisper |
 | `app.py` | — | Example driver script tying all components together |
-| `gui.py` | — | Streamlit chat GUI with source transparency |
+| `gui.py` | — | Streamlit chat GUI with microphone voice input & source transparency |
 
 ---
 
@@ -282,7 +284,9 @@ This launches a dark-themed chat application where you can:
 
 - **Upload** research papers (PDF, TXT, CSV, XLSX, DOCX, JSON) via the sidebar
 - **Build/rebuild** the FAISS vector index with a single click
-- **Ask questions** about your papers and receive grounded answers
+- **Ask questions via text or voice**:
+  - Type questions in the bottom chat bar in English or Hinglish.
+  - Or tap **🎙️ Speak your health concern (Voice Input)** to record your voice using your microphone; Groq Whisper transcribes speech in real time.
 - **View sources** — every answer shows the exact document chunks used, with filenames and similarity scores
 
 ### 3. Build the vector index (CLI)

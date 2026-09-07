@@ -27,6 +27,12 @@ load_dotenv()
 from src.data_loader import load_all_documents
 from src.vectorstore import FaissVectorStore
 from src.search import RAGSearch
+from src.voice import (
+    transcribe_audio,
+    is_voice_transcription_available,
+    AVAILABLE_WHISPER_MODELS,
+    DEFAULT_WHISPER_MODEL,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -147,6 +153,21 @@ def inject_custom_css() -> None:
             margin-bottom: 0.5rem;
         }}
 
+        /* Spoken query badge pill */
+        .spoken-pill {{
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(124, 92, 255, 0.15);
+            color: #A78BFA;
+            border: 1px solid rgba(124, 92, 255, 0.3);
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }}
+
         /* Empty state centered */
         .empty-state {{
             text-align: center;
@@ -182,6 +203,12 @@ def init_session_state() -> None:
         st.session_state.rebuild_in_progress = False
     if "chunk_count" not in st.session_state:
         st.session_state.chunk_count = _get_chunk_count()
+    if "last_processed_audio_id" not in st.session_state:
+        st.session_state.last_processed_audio_id = None
+    if "pending_voice_query" not in st.session_state:
+        st.session_state.pending_voice_query = None
+    if "whisper_model" not in st.session_state:
+        st.session_state.whisper_model = DEFAULT_WHISPER_MODEL
 
 
 def _check_index_exists() -> bool:
@@ -531,6 +558,15 @@ def _render_settings_section() -> None:
         help="Compassionate, non-diagnostic patient education from MedQuAD.",
     )
 
+    # Voice Input Whisper Model
+    st.selectbox(
+        "🎙️ Speech / Whisper Model",
+        options=AVAILABLE_WHISPER_MODELS,
+        index=0,
+        key="whisper_model",
+        help="Groq Whisper model used for fast multilingual voice input transcription.",
+    )
+
     # F-6: Embedding model
     st.text_input(
         "Embedding Model",
@@ -551,6 +587,8 @@ def _render_session_section() -> None:
     # F-7: Clear chat button
     if st.button("🗑️ Clear Chat", use_container_width=True):
         st.session_state.messages = []
+        st.session_state.last_processed_audio_id = None
+        st.session_state.pending_voice_query = None
         st.rerun()
 
     # F-8: API key status indicator
@@ -609,7 +647,7 @@ def render_chat_history() -> None:
                 if sources:
                     _render_sources_expander(sources)
             else:
-                st.markdown(content)
+                st.markdown(content, unsafe_allow_html=True)
 
 
 def _render_sources_expander(sources: list[dict]) -> None:
@@ -642,14 +680,22 @@ def _render_sources_expander(sources: list[dict]) -> None:
                 st.divider()
 
 
-def handle_new_query(query: str) -> None:
+def handle_new_query(query: str, is_voice: bool = False) -> None:
     """Process a new user query: retrieve sources, generate answer (F-10, F-11, F-12, F-14)."""
+    display_content = f'<div class="spoken-pill">🎙️ Spoken Query</div>\n\n{query}' if is_voice else query
+
     # Append user message
-    st.session_state.messages.append({"role": "user", "content": query, "sources": None})
+    st.session_state.messages.append({
+        "role": "user",
+        "content": display_content,
+        "raw_query": query,
+        "is_voice": is_voice,
+        "sources": None,
+    })
 
     # Display user message
     with st.chat_message("user"):
-        st.markdown(query)
+        st.markdown(display_content, unsafe_allow_html=True)
 
     # Generate answer
     with st.chat_message("assistant"):
@@ -729,6 +775,51 @@ def handle_new_query(query: str) -> None:
 # Main Application
 # ---------------------------------------------------------------------------
 
+def _render_voice_input() -> None:
+    """Render microphone audio recorder and handle speech-to-text pipeline."""
+    with st.expander("🎙️ Speak your health concern (Voice Input)", expanded=False):
+        st.markdown(
+            "<p style='color: #9AA0AC; font-size: 0.88rem; margin: 0 0 10px 0;'>"
+            "Tap the microphone icon below to record your question in <b>English</b> or <b>Hinglish</b>. "
+            "MedAssist will transcribe your voice using Groq Whisper and provide immediate guidance."
+            "</p>",
+            unsafe_allow_html=True,
+        )
+
+        if not has_api_key():
+            st.warning("🔑 `GROQ_API_KEY` is required for voice transcription. Add it to `.env`.")
+            return
+
+        audio_data = st.audio_input(
+            "Speak your health concern",
+            key="voice_recorder_widget",
+            label_visibility="collapsed",
+        )
+
+        if audio_data is not None:
+            audio_bytes = audio_data.getvalue()
+            import hashlib
+            audio_hash = hashlib.md5(audio_bytes).hexdigest()
+
+            if audio_hash != st.session_state.get("last_processed_audio_id"):
+                st.session_state.last_processed_audio_id = audio_hash
+                with st.spinner("🎧 Transcribing your voice with Groq Whisper..."):
+                    try:
+                        whisper_model = st.session_state.get("whisper_model", DEFAULT_WHISPER_MODEL)
+                        transcribed_text = transcribe_audio(
+                            audio_bytes,
+                            filename=getattr(audio_data, "name", "recording.wav") or "recording.wav",
+                            model=whisper_model,
+                        )
+                        if transcribed_text and transcribed_text.strip():
+                            st.session_state.pending_voice_query = transcribed_text
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ No speech could be detected in the recording. Please speak clearly and try again.")
+                    except Exception as e:
+                        st.error(f"⚠️ Voice transcription error: {e}")
+
+
 def main() -> None:
     """Application entry point — orchestrates all UI components."""
     configure_page()
@@ -769,10 +860,18 @@ def main() -> None:
         # Render existing chat history
         render_chat_history()
 
+        # Process any newly transcribed voice query
+        if pending_voice := st.session_state.get("pending_voice_query"):
+            st.session_state.pending_voice_query = None
+            handle_new_query(pending_voice, is_voice=True)
+
         # F-10: Chat input (disabled during rebuild per F-14)
         if st.session_state.rebuild_in_progress:
             st.info("⏳ Index rebuild in progress — please wait…")
         else:
+            # Microphone / Voice Input widget
+            _render_voice_input()
+
             if query := st.chat_input("Ask a health or medical question in English or Hinglish…"):
                 if not query.strip():
                     pass  # Streamlit won't send empty strings, but guard anyway
