@@ -158,6 +158,26 @@ sequenceDiagram
     App-->>U: printed summary
 ```
 
+### Ingestion flow
+
+```mermaid
+flowchart LR
+    A[Data dir] -->|load_all_documents| B[Documents]
+    B -->|RecursiveCharacterTextSplitter| C[Chunks]
+    C -->|all-MiniLM-L6-v2| D[Embeddings]
+    D -->|FAISS IndexFlatL2| E[(faiss_store/)]
+```
+
+### Voice query flow
+
+```mermaid
+flowchart LR
+    U[🎙️ Mic] -->|audio_input| T[Groq Whisper]
+    T -->|transcript| Q[Query text]
+    Q -->|reformulate + search| R[FAISS + LLM]
+    R -->|response| U
+```
+
 ---
 
 ## ⚙️ How It Works
@@ -286,7 +306,7 @@ This launches a dark-themed chat application where you can:
 - **Build/rebuild** the FAISS vector index with a single click
 - **Ask questions via text or voice**:
   - Type questions in the bottom chat bar in English or Hinglish.
-  - Or tap **🎙️ Speak your health concern (Voice Input)** to record your voice using your microphone; Groq Whisper transcribes speech in real time.
+  - Or tap the **🎙️ microphone button directly in the chat bar** to record your voice using your microphone; Groq Whisper transcribes speech in real time.
 - **View sources** — every answer shows the exact document chunks used, with filenames and similarity scores
 
 ### 3. Build the vector index (CLI)
