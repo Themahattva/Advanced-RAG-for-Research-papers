@@ -22,7 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-load_dotenv()
+load_dotenv(override=True)
 
 from src.data_loader import load_all_documents
 from src.vectorstore import FaissVectorStore
@@ -256,13 +256,10 @@ def load_vectorstore(persist_dir: str, embedding_model: str) -> FaissVectorStore
 
 
 @st.cache_resource
-def load_rag_search(
-    persist_dir: str, embedding_model: str, llm_model: str
+def _cached_rag_search(
+    persist_dir: str, embedding_model: str, llm_model: str, api_key: str
 ) -> Optional[RAGSearch]:
-    """Load a RAGSearch instance (cached per process). Returns None if API key missing."""
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        return None
+    """Internal cached helper keyed by configuration and api_key."""
     try:
         rag = RAGSearch(
             persist_dir=persist_dir,
@@ -273,6 +270,17 @@ def load_rag_search(
     except Exception as e:
         st.error(f"Failed to initialize RAGSearch: {e}")
         return None
+
+
+def load_rag_search(
+    persist_dir: str, embedding_model: str, llm_model: str
+) -> Optional[RAGSearch]:
+    """Load a RAGSearch instance. Avoids caching None when API key is missing."""
+    load_dotenv(override=True)
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return None
+    return _cached_rag_search(persist_dir, embedding_model, llm_model, api_key)
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +313,8 @@ def get_data_files() -> list[dict]:
 
 
 def has_api_key() -> bool:
-    """Check if GROQ_API_KEY is set in the environment."""
+    """Check if GROQ_API_KEY is set in the environment or .env file."""
+    load_dotenv(override=True)
     key = os.getenv("GROQ_API_KEY")
     return bool(key and key.strip())
 
@@ -515,7 +524,7 @@ def _rebuild_index() -> None:
 
         # Clear cached resources so they reload with the new index
         load_vectorstore.clear()
-        load_rag_search.clear()
+        _cached_rag_search.clear()
 
         status.update(label=f"Done ✅ — {len(chunks)} chunks indexed", state="complete")
 
@@ -775,49 +784,32 @@ def handle_new_query(query: str, is_voice: bool = False) -> None:
 # Main Application
 # ---------------------------------------------------------------------------
 
-def _render_voice_input() -> None:
-    """Render microphone audio recorder and handle speech-to-text pipeline."""
-    with st.expander("🎙️ Speak your health concern (Voice Input)", expanded=False):
-        st.markdown(
-            "<p style='color: #9AA0AC; font-size: 0.88rem; margin: 0 0 10px 0;'>"
-            "Tap the microphone icon below to record your question in <b>English</b> or <b>Hinglish</b>. "
-            "MedAssist will transcribe your voice using Groq Whisper and provide immediate guidance."
-            "</p>",
-            unsafe_allow_html=True,
-        )
+def _handle_voice_submission(audio_file, text_input: str = "") -> None:
+    """Transcribe audio from chat input and submit as a spoken query."""
+    if not has_api_key():
+        st.error("🔑 `GROQ_API_KEY` is required for voice transcription. Add it to `.env`.")
+        return
 
-        if not has_api_key():
-            st.warning("🔑 `GROQ_API_KEY` is required for voice transcription. Add it to `.env`.")
-            return
-
-        audio_data = st.audio_input(
-            "Speak your health concern",
-            key="voice_recorder_widget",
-            label_visibility="collapsed",
-        )
-
-        if audio_data is not None:
-            audio_bytes = audio_data.getvalue()
-            import hashlib
-            audio_hash = hashlib.md5(audio_bytes).hexdigest()
-
-            if audio_hash != st.session_state.get("last_processed_audio_id"):
-                st.session_state.last_processed_audio_id = audio_hash
-                with st.spinner("🎧 Transcribing your voice with Groq Whisper..."):
-                    try:
-                        whisper_model = st.session_state.get("whisper_model", DEFAULT_WHISPER_MODEL)
-                        transcribed_text = transcribe_audio(
-                            audio_bytes,
-                            filename=getattr(audio_data, "name", "recording.wav") or "recording.wav",
-                            model=whisper_model,
-                        )
-                        if transcribed_text and transcribed_text.strip():
-                            st.session_state.pending_voice_query = transcribed_text
-                            st.rerun()
-                        else:
-                            st.warning("⚠️ No speech could be detected in the recording. Please speak clearly and try again.")
-                    except Exception as e:
-                        st.error(f"⚠️ Voice transcription error: {e}")
+    with st.spinner("🎧 Transcribing your voice with Groq Whisper..."):
+        try:
+            audio_bytes = audio_file.getvalue()
+            whisper_model = st.session_state.get("whisper_model", DEFAULT_WHISPER_MODEL)
+            transcribed_text = transcribe_audio(
+                audio_bytes,
+                filename=getattr(audio_file, "name", "recording.wav") or "recording.wav",
+                model=whisper_model,
+            )
+            if transcribed_text and transcribed_text.strip():
+                final_query = (
+                    f"{text_input} {transcribed_text.strip()}".strip()
+                    if text_input
+                    else transcribed_text.strip()
+                )
+                handle_new_query(final_query, is_voice=True)
+            else:
+                st.warning("⚠️ No speech could be detected in the recording. Please speak clearly and try again.")
+        except Exception as e:
+            st.error(f"⚠️ Voice transcription error: {e}")
 
 
 def main() -> None:
@@ -860,23 +852,35 @@ def main() -> None:
         # Render existing chat history
         render_chat_history()
 
-        # Process any newly transcribed voice query
+        # Process any newly transcribed voice query (from external or legacy triggers)
         if pending_voice := st.session_state.get("pending_voice_query"):
             st.session_state.pending_voice_query = None
             handle_new_query(pending_voice, is_voice=True)
 
-        # F-10: Chat input (disabled during rebuild per F-14)
+        # F-10: Unified chat & voice input in the exact same typing space
         if st.session_state.rebuild_in_progress:
             st.info("⏳ Index rebuild in progress — please wait…")
         else:
-            # Microphone / Voice Input widget
-            _render_voice_input()
+            chat_val = st.chat_input(
+                "Ask a health question in English or Hinglish (type or tap 🎙️ to speak)…",
+                accept_audio=True,
+            )
 
-            if query := st.chat_input("Ask a health or medical question in English or Hinglish…"):
-                if not query.strip():
-                    pass  # Streamlit won't send empty strings, but guard anyway
-                else:
-                    handle_new_query(query)
+            if chat_val:
+                audio_file = getattr(chat_val, "audio", None) or (
+                    chat_val.get("audio") if isinstance(chat_val, dict) else None
+                )
+                text_input = getattr(chat_val, "text", None) or (
+                    chat_val.get("text", "")
+                    if isinstance(chat_val, dict)
+                    else (chat_val if isinstance(chat_val, str) else "")
+                )
+                text_input = (text_input or "").strip()
+
+                if audio_file is not None:
+                    _handle_voice_submission(audio_file, text_input=text_input)
+                elif text_input:
+                    handle_new_query(text_input, is_voice=False)
 
 
 if __name__ == "__main__":

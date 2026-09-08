@@ -11,7 +11,7 @@ from typing import Optional
 import groq
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 DEFAULT_WHISPER_MODEL = "whisper-large-v3-turbo"
 AVAILABLE_WHISPER_MODELS = [
@@ -30,6 +30,7 @@ HEALTH_TRANSCRIPTION_PROMPT = (
 
 def get_groq_client() -> Optional[groq.Groq]:
     """Initialize and return a Groq client if GROQ_API_KEY is available."""
+    load_dotenv(override=True)
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return None
@@ -38,6 +39,7 @@ def get_groq_client() -> Optional[groq.Groq]:
 
 def is_voice_transcription_available() -> bool:
     """Check if the Groq API key is configured for transcription."""
+    load_dotenv(override=True)
     return bool(os.getenv("GROQ_API_KEY"))
 
 

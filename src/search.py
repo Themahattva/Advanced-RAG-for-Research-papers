@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.vectorstore import FaissVectorStore
 from langchain_groq import ChatGroq
 
-load_dotenv()
+load_dotenv(override=True)
 
 HINGLISH_KEYWORDS = {
     "kya", "kaise", "kyun", "hai", "hain", "batao", "samjhao", "karo", "hoga",
@@ -53,6 +53,7 @@ class RAGSearch:
         else:
             self.vectorstore.load()
 
+        load_dotenv(override=True)
         groq_api_key = os.getenv("GROQ_API_KEY")
         if not llm_model:
             llm_model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
