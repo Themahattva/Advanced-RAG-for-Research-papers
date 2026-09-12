@@ -103,8 +103,8 @@ The GUI is a **presentation layer only** — it must not reimplement chunking, e
 
 | ID | Feature | Requirement |
 |---|---|---|
-| F-15 | App title & tagline | Page title: **"📚 Research Paper RAG"**, subtitle: "Ask questions across your research paper library." |
-| F-16 | Page config | `st.set_page_config(page_title="Research Paper RAG", page_icon="📚", layout="wide", initial_sidebar_state="expanded")` |
+| F-15 | App title & tagline | Page title: **"MedAssist"**, subtitle: "Ask questions across your research paper library." |
+| F-16 | Page config | `st.set_page_config(page_title="MedAssist", page_icon="📚", layout="wide", initial_sidebar_state="expanded")` |
 
 ---
 

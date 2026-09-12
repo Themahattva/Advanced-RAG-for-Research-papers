@@ -349,7 +349,7 @@ def save_uploaded_file(uploaded_file) -> bool:
 def render_sidebar() -> None:
     """Render the full sidebar with all sections separated by dividers."""
     with st.sidebar:
-        st.markdown("## 📚 Research Paper RAG")
+        st.markdown("## MedAssist")
         st.caption("Ask questions across your research paper library.")
 
         st.divider()
